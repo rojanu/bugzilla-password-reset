@@ -1,0 +1,116 @@
+=== modified file 'Bugzilla/User.pm'
+--- Bugzilla/User.pm	2011-01-07 14:14:40 +0000
++++ Bugzilla/User.pm	2011-01-12 15:20:38 +0000
+@@ -118,7 +118,7 @@
+         login_name
+         realname
+     );
+-    push(@cols, 'cryptpassword') if exists $self->{cryptpassword};
++    push(@cols, 'cryptpassword', 'password_changed') if exists $self->{cryptpassword};
+     return @cols;
+ };
+ 
+@@ -167,6 +167,8 @@
+         if (exists $changes->{login_name} || exists $changes->{disabledtext}
+             || exists $changes->{cryptpassword});
+ 
++    $self->set_password_history() if exists $changes->{cryptpassword};
++
+     # XXX Can update profiles_activity here as soon as it understands
+     #     field names like login_name.
+ 
+@@ -233,7 +235,12 @@
+     delete $self->{identity};
+ }
+ 
+-sub set_password { $_[0]->set('cryptpassword', $_[1]); }
++sub set_password { 
++    my ($self, $value) = @_;
++    $self->set('cryptpassword', $value);
++    $self->check_password_history($value);
++    $self->{password_changed} = Bugzilla->dbh->selectrow_array('SELECT LOCALTIMESTAMP(0)');
++}
+ 
+ 
+ ################################################################################
+@@ -1762,6 +1769,7 @@
+ 
+     $dbh->bz_start_transaction();
+ 
++    $_[0]->{password_changed} = $dbh->selectrow_array('SELECT LOCALTIMESTAMP(0)');
+     my $user = $class->SUPER::create(@_);
+ 
+     # Turn on all email for the new user
+
+=== modified file 'collectstats.pl'
+--- collectstats.pl	2010-11-02 23:06:15 +0000
++++ collectstats.pl	2011-01-12 15:18:39 +0000
+@@ -45,6 +45,9 @@
+ use Bugzilla::Product;
+ use Bugzilla::Field;
+ 
++BEGIN { Bugzilla->extensions };
++use Bugzilla::Extension::PasswordReset::Util;
++
+ # Turn off output buffering (probably needed when displaying output feedback
+ # in the regenerate mode).
+ $| = 1;
+@@ -161,6 +164,8 @@
+ 
+ CollectSeriesData();
+ 
++send_password_notification_email();
++
+ sub check_data_dir {
+     my $dir = shift;
+ 
+
+=== modified file 'token.cgi'
+--- token.cgi	2010-05-20 15:38:16 +0000
++++ token.cgi	2011-01-12 15:18:39 +0000
+@@ -206,20 +206,15 @@
+     my ($token, $password) = @_;
+     my $dbh = Bugzilla->dbh;
+ 
+-    # Create a crypted version of the new password
+-    my $cryptedpassword = bz_crypt($password);
+-
+     # Get the user's ID from the tokens table.
+     my ($userid) = $dbh->selectrow_array('SELECT userid FROM tokens
+                                           WHERE token = ?', undef, $token);
++    my $user = new Bugzilla::User($userid);
+     
+-    # Update the user's password in the profiles table and delete the token
+-    # from the tokens table.
++    $user->set_password($password);
++
+     $dbh->bz_start_transaction();
+-    $dbh->do(q{UPDATE   profiles
+-               SET      cryptpassword = ?
+-               WHERE    userid = ?},
+-             undef, ($cryptedpassword, $userid) );
++    $user->update();
+     $dbh->do('DELETE FROM tokens WHERE token = ?', undef, $token);
+     $dbh->bz_commit_transaction();
+ 
+
+=== modified file 'userprefs.cgi'
+--- userprefs.cgi	2010-11-04 17:00:58 +0000
++++ userprefs.cgi	2011-01-12 15:18:39 +0000
+@@ -103,11 +103,10 @@
+             validate_password($pwd1, $pwd2);
+ 
+             if ($oldpassword ne $pwd1) {
+-                my $cryptedpassword = bz_crypt($pwd1);
+-                $dbh->do(q{UPDATE profiles
+-                              SET cryptpassword = ?
+-                            WHERE userid = ?},
+-                         undef, ($cryptedpassword, $user->id));
++                $user->set_password($pwd1);
++                $dbh->bz_start_transaction();
++                $user->update();
++                $dbh->bz_commit_transaction();
+ 
+                 # Invalidate all logins except for the current one
+                 Bugzilla->logout(LOGOUT_KEEP_CURRENT);
+
