@@ -1,16 +1,16 @@
 === modified file 'Bugzilla/User.pm'
---- Bugzilla/User.pm	2011-01-07 14:14:40 +0000
-+++ Bugzilla/User.pm	2011-01-12 15:20:38 +0000
-@@ -118,7 +118,7 @@
-         login_name
-         realname
+--- Bugzilla/User.pm	2011-10-04 21:36:31 +0000
++++ Bugzilla/User.pm	2011-10-05 15:29:46 +0000
+@@ -125,7 +125,7 @@
+         extern_id
+         is_enabled
      );
 -    push(@cols, 'cryptpassword') if exists $self->{cryptpassword};
 +    push(@cols, 'cryptpassword', 'password_changed') if exists $self->{cryptpassword};
      return @cols;
  };
  
-@@ -167,6 +167,8 @@
+@@ -186,6 +186,8 @@
          if (exists $changes->{login_name} || exists $changes->{disabledtext}
              || exists $changes->{cryptpassword});
  
@@ -18,8 +18,8 @@
 +
      # XXX Can update profiles_activity here as soon as it understands
      #     field names like login_name.
- 
-@@ -233,7 +235,12 @@
+     
+@@ -278,7 +280,12 @@
      delete $self->{identity};
  }
  
@@ -31,9 +31,9 @@
 +    $self->{password_changed} = Bugzilla->dbh->selectrow_array('SELECT LOCALTIMESTAMP(0)');
 +}
  
- 
- ################################################################################
-@@ -1762,6 +1769,7 @@
+ sub set_disabledtext {
+     $_[0]->set('disabledtext', $_[1]);
+@@ -1841,6 +1848,7 @@
  
      $dbh->bz_start_transaction();
  
@@ -43,11 +43,11 @@
      # Turn on all email for the new user
 
 === modified file 'collectstats.pl'
---- collectstats.pl	2010-11-02 23:06:15 +0000
-+++ collectstats.pl	2011-01-12 15:18:39 +0000
-@@ -45,6 +45,9 @@
- use Bugzilla::Product;
- use Bugzilla::Field;
+--- collectstats.pl	2011-07-26 18:38:36 +0000
++++ collectstats.pl	2011-10-05 15:29:46 +0000
+@@ -48,6 +48,9 @@
+ # Print the help message if that switch was selected.
+ pod2usage({-verbose => 1, -exitval => 1}) if $switch{'help'};
  
 +BEGIN { Bugzilla->extensions };
 +use Bugzilla::Extension::PasswordReset::Util;
@@ -55,7 +55,7 @@
  # Turn off output buffering (probably needed when displaying output feedback
  # in the regenerate mode).
  $| = 1;
-@@ -161,6 +164,8 @@
+@@ -156,6 +159,8 @@
  
  CollectSeriesData();
  
@@ -65,39 +65,10 @@
      my $dir = shift;
  
 
-=== modified file 'token.cgi'
---- token.cgi	2010-05-20 15:38:16 +0000
-+++ token.cgi	2011-01-12 15:18:39 +0000
-@@ -206,20 +206,15 @@
-     my ($token, $password) = @_;
-     my $dbh = Bugzilla->dbh;
- 
--    # Create a crypted version of the new password
--    my $cryptedpassword = bz_crypt($password);
--
-     # Get the user's ID from the tokens table.
-     my ($userid) = $dbh->selectrow_array('SELECT userid FROM tokens
-                                           WHERE token = ?', undef, $token);
-+    my $user = new Bugzilla::User($userid);
-     
--    # Update the user's password in the profiles table and delete the token
--    # from the tokens table.
-+    $user->set_password($password);
-+
-     $dbh->bz_start_transaction();
--    $dbh->do(q{UPDATE   profiles
--               SET      cryptpassword = ?
--               WHERE    userid = ?},
--             undef, ($cryptedpassword, $userid) );
-+    $user->update();
-     $dbh->do('DELETE FROM tokens WHERE token = ?', undef, $token);
-     $dbh->bz_commit_transaction();
- 
-
 === modified file 'userprefs.cgi'
---- userprefs.cgi	2010-11-04 17:00:58 +0000
-+++ userprefs.cgi	2011-01-12 15:18:39 +0000
-@@ -103,11 +103,10 @@
+--- userprefs.cgi	2011-08-17 12:53:36 +0000
++++ userprefs.cgi	2011-10-05 15:29:46 +0000
+@@ -102,11 +102,10 @@
              validate_password($pwd1, $pwd2);
  
              if ($oldpassword ne $pwd1) {
