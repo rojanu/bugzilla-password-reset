@@ -39,9 +39,10 @@ use constant PASSWORD_WARN_FREQ_DAYS  => 3;
 # @EXPORT.)
 
 sub send_password_notification_email {
+    print "In Send\n";
     my $reset_period = Bugzilla->params->{'password_reset_period'};
     return if !$reset_period;
-    
+    print "Checking passwords\n";
     my $dbh = Bugzilla->dbh;
     my $warn_days = PASSWORD_RESET_WARN_DAYS;
     my $warn_freq_days = PASSWORD_WARN_FREQ_DAYS;
@@ -53,15 +54,19 @@ sub send_password_notification_email {
     my $query = "SELECT login_name FROM profiles 
                     WHERE disabledtext = ''
                     AND disable_mail != 1
+                    AND (extern_id IS NULL OR extern_id = '')
                     AND ".$dbh->sql_date_format("password_changed", "%Y%m%d")." = ".
                    $dbh->sql_date_format($dbh->sql_date_math('LOCALTIMESTAMP(0)', '-', '?', 'DAY'), "%Y%m%d");
-    
+    print "Reset Query: ". $query ."\n";
+    print "Warn users of password reset:\n";
     # Warn users of password reset
     while ($warn_days >= 0) {
         $warn_days = $warn_freq_days if($warn_days > 0 && $warn_days < $warn_freq_days);
         # Fetch all users to be warned and send an email
         my $warn_users = $dbh->selectcol_arrayref($query, undef, $warn_barier);
+        print $warn_days . " Days remaining:\n";
         foreach my $recipient (@$warn_users) {
+            print "\t$recipient\n";
             my $message;
             my $template = Bugzilla->template;
             $template->process('email/password-change-notification.txt.tmpl',
@@ -81,13 +86,17 @@ sub send_password_notification_email {
     $query = "SELECT userid, login_name FROM profiles 
                     WHERE disabledtext = ''
                     AND disable_mail != 1
+                    AND (extern_id IS NULL OR extern_id = '')
                     AND cryptpassword != '*'
                     AND password_changed <".
                    $dbh->sql_date_math('LOCALTIMESTAMP(0)', '-', '?', 'DAY');
+    print "Expiry Query: ". $query ." " > $reset_period ."\n";
     my $reset_users = $dbh->selectall_arrayref($query, undef, $reset_period);
     my $cryptedpassword = '*';
+    print "Warn users of password expiry:\n";
     foreach my $row (@$reset_users) {
         my ($userid, $recipient) = @$row;
+        print "\t$recipient\n";
         Bugzilla->dbh->do(q{UPDATE profiles
                       SET cryptpassword = ?,
                           password_changed = LOCALTIMESTAMP(0)

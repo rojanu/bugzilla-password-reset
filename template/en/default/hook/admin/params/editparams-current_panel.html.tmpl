@@ -20,20 +20,18 @@
   
 [%# This is a list of parameter descriptions %]
 
-[% FOREACH panel IN panels -%]
-    [% IF panel.name == "auth" %]
-        [%
-          panel.param_descs.password_history_length =
-                         'The number of consecutive passwords which
-                         are associated with a user account before
-                         an old password can be used. This
-                         feature is disabled if the value is set to 0.'
+[% IF panel.name == "auth" %]
+    [%
+      panel.param_descs.password_history_length =
+                     'The number of consecutive passwords which
+                     are associated with a user account before
+                     an old password can be used. This
+                     feature is disabled if the value is set to 0.'
 
-          panel.param_descs.password_reset_period =
-                         'Users will be required to change
-                         their passwords every time this number of days
-                         elapses since their last password change. This
-                         feature is disabled if the value is set to 0.'
-        %]
-    [% END %]
-[% END -%]
+      panel.param_descs.password_reset_period =
+                     'Users will be required to change
+                     their passwords every time this number of days
+                     elapses since their last password change. This
+                     feature is disabled if the value is set to 0.'
+    %]
+[% END %]

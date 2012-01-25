@@ -1,6 +1,6 @@
 === modified file 'Bugzilla/User.pm'
---- Bugzilla/User.pm	2011-10-04 21:36:31 +0000
-+++ Bugzilla/User.pm	2011-10-05 15:29:46 +0000
+--- Bugzilla/User.pm	2011-12-28 22:15:49 +0000
++++ Bugzilla/User.pm	2012-01-23 16:15:45 +0000
 @@ -125,7 +125,7 @@
          extern_id
          is_enabled
@@ -33,7 +33,7 @@
  
  sub set_disabledtext {
      $_[0]->set('disabledtext', $_[1]);
-@@ -1841,6 +1848,7 @@
+@@ -1852,6 +1859,7 @@
  
      $dbh->bz_start_transaction();
  
@@ -43,9 +43,9 @@
      # Turn on all email for the new user
 
 === modified file 'collectstats.pl'
---- collectstats.pl	2011-07-26 18:38:36 +0000
-+++ collectstats.pl	2011-10-05 15:29:46 +0000
-@@ -48,6 +48,9 @@
+--- collectstats.pl	2011-11-26 13:18:04 +0000
++++ collectstats.pl	2012-01-24 11:01:21 +0000
+@@ -49,6 +49,9 @@
  # Print the help message if that switch was selected.
  pod2usage({-verbose => 1, -exitval => 1}) if $switch{'help'};
  
@@ -55,20 +55,22 @@
  # Turn off output buffering (probably needed when displaying output feedback
  # in the regenerate mode).
  $| = 1;
-@@ -156,6 +159,8 @@
+@@ -160,7 +163,9 @@
+ # Uncomment the following line for performance testing.
+ #print "Total time taken " . delta_time($tstart, $tend) . "\n";
  
- CollectSeriesData();
- 
-+send_password_notification_email();
+-CollectSeriesData();
++#CollectSeriesData();
 +
- sub check_data_dir {
-     my $dir = shift;
++send_password_notification_email();
  
+ sub collect_stats {
+     my $dir = shift;
 
 === modified file 'userprefs.cgi'
---- userprefs.cgi	2011-08-17 12:53:36 +0000
-+++ userprefs.cgi	2011-10-05 15:29:46 +0000
-@@ -102,11 +102,10 @@
+--- userprefs.cgi	2012-01-18 21:32:46 +0000
++++ userprefs.cgi	2012-01-23 16:15:45 +0000
+@@ -101,11 +101,10 @@
              validate_password($pwd1, $pwd2);
  
              if ($oldpassword ne $pwd1) {
